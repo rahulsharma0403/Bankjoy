@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { fetchExchangeRates, initApiContext } from '../utils/apiUtils';
+import { fetchExchangeRates, initApiContext } from '../utils/apiutils';
 import generateHTMLReport from '../utils/generateReport';
 import path from 'path';
 import fs from 'fs';
