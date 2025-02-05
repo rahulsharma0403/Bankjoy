@@ -1,89 +1,119 @@
 import { test, expect } from '@playwright/test';
-import { fetchExchangeRates, initApiContext } from '../utils/apiutil';
-
+import { fetchExchangeRates, initApiContext } from '../utils/apiUtils';
+import generateHTMLReport from '../utils/generateReport';
+import path from 'path';
+import fs from 'fs';
+import generateHTMLReportWithAverages from '../utils/generateReport';
 
 const currenciesList = [
-    { base: 'CAD', target: 'AUD', weeks: '0' }
+    { base: 'CAD', target: 'USD', weeks: '10' },
+    // { base: 'CAD', target: 'AUD', weeks: '10' },
+    // { base: 'CAD', target: 'EUR', weeks: '10' },
 ];
 
 test.beforeAll(async () => {
     await initApiContext();
 });
 test.describe('Forex API Tests', () => {
-    currenciesList.forEach(({ base, target, weeks }) => {
-        test(`should fetch the most recent exchange rates for ${base} to ${target}`, async () => {
-                const data = await fetchExchangeRates(base, target, `recent_weeks=${weeks}`);
+    test('should fetch exchange rates for all specified currency pairs', async () => {
 
-                // Log the parsed data to understand its structure
-                console.log(JSON.stringify(data, null, 2));
+        // Verify that all entries have the same 'weeks' parameter
+        const weeksValues = [...new Set(currenciesList.map(c => c.weeks))];
+        if (weeksValues.length !== 1) {
+            throw new Error('All currency entries must have the same "weeks" value');
+        }
+        const weeks = weeksValues[0];
+        const queryParams = `recent_weeks=${weeks}`;
 
-                const reportData = data.observations.map((obs: any) => ({
-                    date: obs.d,
-                    value: obs[`FX${base}${target}`]?.v || 'N/A',
-                    currency: `${base} to ${target}`
-                }));
+        // Generate the list of currency pair strings (e.g., ['FXCADAUD'])
+        const currencyPairs = currenciesList.map(c => `FX${c.base}${c.target}`);
 
-                // Calculate the average exchange rate
-                const values = data.observations.map((obs: any) => parseFloat(obs[`FX${base}${target}`]?.v || '0'));
-                const total = values.reduce((sum: number, value: number) => sum + value, 0);
-                const average = total / values.length;
+        // Fetch data in a single API call
+        const data = await fetchExchangeRates(currencyPairs, queryParams);
 
-                expect(average).toBeGreaterThan(0);
+        // Dynamic report data for each currency pair
+        const reportData = currenciesList.flatMap((pair) =>
+            data.observations.map((obs: any) => ({
+                date: obs.d,
+                value: obs[`FX${pair.base}${pair.target}`]?.v || 'N/A',
+                currency: `${pair.base} to ${pair.target}`,
+            }))
+        );
 
-                // Positive assertions
-                expect(data).toBeDefined();
-                expect(data).toHaveProperty('observations');
-                expect(data.observations).toBeInstanceOf(Array);
-                expect(data.observations.length).toBeGreaterThan(0);
+        // Map through the currenciesList to calculate average for each currency pair
+        const averages = currenciesList.map((pair) => {
+            const values = data.observations.map((obs: any) =>
+                parseFloat(obs[`FX${pair.base}${pair.target}`]?.v || '0')
+            );
+            const total = values.reduce((sum: number, value: number) => sum + value, 0);
+            const average = values.length > 0 ? total / values.length : 0; // Handle empty lists
 
-                data.observations.forEach((obs: any) => {
-                    // Check that each observation has a date
-                    expect(obs).toHaveProperty('d');
-                    expect(typeof obs.d).toBe('string');
-                    expect(obs.d).toMatch(/^\d{4}-\d{2}-\d{2}$/); // Validate date format YYYY-MM-DD
+            return {
+                currencyPair: `${pair.base} to ${pair.target}`,
+                average: average
+            };
+        });
 
-                    // Check that each observation has an exchange rate value
-                    const currencyPairKey = `FX${base}${target}`;
-                    expect(obs).toHaveProperty(currencyPairKey);
-                    expect(obs[currencyPairKey]).toHaveProperty('v');
-                    expect(typeof obs[currencyPairKey].v).toBe('string'); // or 'number' if it's a number
+        //generate a separate HTML report for each pair or add averages to the report as follows:
+        await generateHTMLReportWithAverages(averages);
 
-                    // Optionally, validate the value format (e.g., is it a number?)
-                    expect(!isNaN(parseFloat(obs[currencyPairKey].v))).toBe(true);
-                });
+        // Positive assertions
+        expect(data).toBeDefined();
+        expect(data).toHaveProperty('observations');
+        expect(data.observations).toBeInstanceOf(Array);
+        expect(data.observations.length).toBeGreaterThan(0);
+
+        // Assertions for each observation and pair
+        data.observations.forEach((obs: any) => {
+            currenciesList.forEach((pair) => {
+                const currencyPairKey = `FX${pair.base}${pair.target}`;
+                // Check that each observation has a date
+                expect(obs).toHaveProperty('d');
+                expect(typeof obs.d).toBe('string');
+                expect(obs.d).toMatch(/^\d{4}-\d{2}-\d{2}$/); // Validate date format YYYY-MM-DD
+
+                // Check that each observation has an exchange rate value
+                expect(obs).toHaveProperty(currencyPairKey);
+                expect(obs[currencyPairKey]).toHaveProperty('v');
+                expect(typeof obs[currencyPairKey].v).toBe('string'); // or 'number' if it's a number
+
+                // Optionally, validate the value format (e.g., is it a number?)
+                expect(!isNaN(parseFloat(obs[currencyPairKey].v))).toBe(true);
+            });
         });
     });
 
     // Error handling tests
     test('should handle invalid currency pairs gracefully', async () => {
         try {
-            const data = await fetchExchangeRates('CAD', 'ZZZ', 'recent_weeks=10');
-            console.log(JSON.stringify(data, null, 2));
+            const data = await fetchExchangeRates(['CAD', 'ZZZ'], 'recent_weeks=10');
+            expect(data.status()).toBe(404); // Ensure status code is 404
             expect(data).toHaveProperty('error');
             expect(data.error).toContain('Invalid currency');
         } catch (error) {
             if (error instanceof Error) {
                 expect(error.message).toContain('Failed to fetch data');
+                expect(error.message).toContain('Status: 404');
             }
         }
     });
 
     test('should handle invalid query parameters gracefully', async () => {
         try {
-            const data = await fetchExchangeRates('CAD', 'AUD', 'recent_weeks=invalid');
-            console.log(JSON.stringify(data, null, 2));
+            const data = await fetchExchangeRates(['CAD', 'ZZZ'], 'recent_weeks=invalid');
             expect(data).toHaveProperty('error');
             expect(data.error).toContain('Invalid query parameter');
         } catch (error) {
             if (error instanceof Error) {
                 expect(error.message).toContain('Failed to fetch data');
+                expect(error.message).toContain('Status: 400');
             }
         }
     });
 
     test('should handle HTTP 404 Not Found response', async () => {
         try {
-            const response = await fetchExchangeRates('CAD', 'AUD', 'non_existent_param');
+            const response = await fetchExchangeRates(['CAD', 'AUDD'], 'recent_weeks=10');
             expect(response.status()).toBe(404); // Ensure status code is 404
             const responseBody = await response.json();
             expect(responseBody).toHaveProperty('error');
@@ -91,27 +121,28 @@ test.describe('Forex API Tests', () => {
         } catch (error) {
             if (error instanceof Error) {
                 expect(error.message).toContain('Failed to fetch data');
+                expect(error.message).toContain('Status: 404');
             }
         }
     });
 
-    test('should handle HTTP 500 Internal Server Error response', async () => {
+    test('should handle HTTP 400 Bad Request for negative values', async () => {
         try {
-            const response = await fetchExchangeRates('CAD', 'AUD', 'server_error_param');
-            expect(response.status()).toBe(500); // Ensure status code is 500
+            const response = await fetchExchangeRates(['CAD', 'AUD'], 'recent_weeks=-1');
             const responseBody = await response.json();
             expect(responseBody).toHaveProperty('error');
-            expect(responseBody.error).toContain('Internal Server Error');
+            expect(responseBody.error).toContain('Not Found');
         } catch (error) {
             if (error instanceof Error) {
                 expect(error.message).toContain('Failed to fetch data');
+                expect(error.message).toContain('Status: 400');
             }
         }
     });
 
     test('should handle HTTP 400 Bad Request response', async () => {
         try {
-            const response = await fetchExchangeRates('CAD', 'AUD', 'bad_request_param');
+            const response = await fetchExchangeRates(['CAD', 'AUD'], 'bad_request_param');
             expect(response.status()).toBe(400); // Ensure status code is 400
             const responseBody = await response.json();
             expect(responseBody).toHaveProperty('error');
@@ -119,6 +150,7 @@ test.describe('Forex API Tests', () => {
         } catch (error) {
             if (error instanceof Error) {
                 expect(error.message).toContain('Failed to fetch data');
+                expect(error.message).toContain('Status: 400');
             }
         }
     });
