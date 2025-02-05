@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { fetchExchangeRates, initApiContext } from '../utils/apiutil';
+import { fetchExchangeRates, initApiContext } from '../utils/apiUtil';
 
 
 const currenciesList = [
