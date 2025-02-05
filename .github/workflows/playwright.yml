@@ -48,3 +48,14 @@ jobs:
             ./playwright-report/*.html
             ./playwright-report/allure-report/*.html
           retention-days: 30
+
+          
+      # Upload the HTML as an artifact for later viewing
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: avg-results
+          path: |
+            ./report/*.html
+          retention-days: 30
