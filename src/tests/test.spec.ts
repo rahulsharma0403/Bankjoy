@@ -7,7 +7,7 @@ import generateHTMLReportWithAverages from '../utils/generateReport';
 
 const currenciesList = [
     { base: 'CAD', target: 'USD', weeks: '10' },
-    // { base: 'CAD', target: 'AUD', weeks: '10' },
+    { base: 'CAD', target: 'AUD', weeks: '10' },
     // { base: 'CAD', target: 'EUR', weeks: '10' },
 ];
 
