@@ -4,7 +4,10 @@ on:
   push:
     branches:
       - main  # Runs the tests on push to the main branch
-  
+  pull_request:
+    branches:
+      - main  # Runs the tests on pull requests targeting the main branch
+  workflow_dispatch:  # This enables manual run of the workflow from GitHub Actions
 
 jobs:
   run_tests:
