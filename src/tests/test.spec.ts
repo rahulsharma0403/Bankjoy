@@ -3,7 +3,7 @@ import { fetchExchangeRates, initApiContext } from '../utils/apiutil';
 
 
 const currenciesList = [
-    { base: 'CAD', target: 'AUD', weeks: '0' }
+    { base: 'CAD', target: 'AUD', weeks: '10' }
 ];
 
 test.beforeAll(async () => {
