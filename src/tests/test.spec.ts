@@ -31,15 +31,7 @@ test.describe('Forex API Tests', () => {
         // Fetch data in a single API call
         const data = await fetchExchangeRates(currencyPairs, queryParams);
 
-        // Dynamic report data for each currency pair
-        const reportData = currenciesList.flatMap((pair) =>
-            data.observations.map((obs: any) => ({
-                date: obs.d,
-                value: obs[`FX${pair.base}${pair.target}`]?.v || 'N/A',
-                currency: `${pair.base} to ${pair.target}`,
-            }))
-        );
-
+       
         // Map through the currenciesList to calculate average for each currency pair
         const averages = currenciesList.map((pair) => {
             const values = data.observations.map((obs: any) =>
